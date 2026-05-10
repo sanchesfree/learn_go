@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "embed"
+
 	"booking-service/internal/config"
 	"booking-service/internal/handler"
 	"booking-service/internal/repository"
@@ -160,40 +162,13 @@ func main() {
 	logger.Info("server stopped gracefully")
 }
 
+//go:embed migrations/001_init.sql
+var migrationSQL string
+
 // runMigrations — простейший раннер миграций.
+// Читает SQL из файла migrations/001_init.sql через go:embed.
 // На проде используют golang-migrate, goose, или atlas.
 func runMigrations(db *sqlx.DB) error {
-	// Читаем SQL-файл миграции
-	migrationSQL := `
-	CREATE EXTENSION IF NOT EXISTS "btree_gist";
-
-	CREATE TABLE IF NOT EXISTS rooms (
-		id          BIGSERIAL PRIMARY KEY,
-		name        VARCHAR(100) NOT NULL,
-		capacity    INT NOT NULL CHECK (capacity > 0),
-		created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);
-
-	CREATE TABLE IF NOT EXISTS bookings (
-		id          BIGSERIAL PRIMARY KEY,
-		room_id     BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-		user_id     VARCHAR(100) NOT NULL,
-		title       VARCHAR(200) NOT NULL,
-		start_time  TIMESTAMPTZ NOT NULL,
-		end_time    TIMESTAMPTZ NOT NULL,
-		status      VARCHAR(20) NOT NULL DEFAULT 'active',
-		created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-		EXCLUDE USING gist (
-			room_id WITH =,
-			tstzrange(start_time, end_time, '[)') WITH &&
-		) WHERE (status = 'active')
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_bookings_room_id ON bookings(room_id);
-	CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
-	CREATE INDEX IF NOT EXISTS idx_bookings_start_time ON bookings(start_time);
-	`
-
 	_, err := db.Exec(migrationSQL)
 	return err
 }
